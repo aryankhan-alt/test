@@ -1,18 +1,23 @@
 import express from "express";
-import puppeteer from "puppeteer";
+import { launch } from "puppeteer-core";
+import { computeSystemExecutablePath } from "@puppeteer/browsers";
 
 const app = express();
 const port = process.env.PORT || 3000;
 
 app.get("/fetch-video", async (req, res) => {
   const targetUrl = req.query.url;
-  if (!targetUrl) {
-    return res.status(400).json({ error: "Missing ?url=" });
-  }
+  if (!targetUrl) return res.status(400).json({ error: "Missing ?url" });
 
   try {
-    const browser = await puppeteer.launch({
-      headless: true,
+    const executablePath = computeSystemExecutablePath({
+      browser: "chromium",
+      buildId: "121.0.6167.140", // latest as of June 2025
+    });
+
+    const browser = await launch({
+      headless: "new",
+      executablePath,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
 
@@ -23,16 +28,14 @@ app.get("/fetch-video", async (req, res) => {
     });
 
     const videoUrl = await page.evaluate(() => {
-      const videoExtensions = [".m3u8", ".mp4", ".webm", ".ts", ".mpd", ".mkv"];
+      const exts = [".m3u8", ".mp4", ".webm", ".ts"];
       let found = "";
-
-      document.querySelectorAll("iframe, source, video, script, a").forEach((el) => {
+      document.querySelectorAll("video, source, script, iframe, a").forEach((el) => {
         const src = el.src || el.href || "";
-        if (src && videoExtensions.some((ext) => src.includes(ext))) {
+        if (src && exts.some((ext) => src.includes(ext))) {
           found = src;
         }
       });
-
       return found;
     });
 
@@ -44,7 +47,6 @@ app.get("/fetch-video", async (req, res) => {
       res.json({ success: false, video: null });
     }
   } catch (err) {
-    console.error(err);
     res.status(500).json({ success: false, error: err.toString() });
   }
 });
@@ -54,5 +56,5 @@ app.get("/", (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`✅ Server running at http://localhost:${port}`);
+  console.log(`✅ Server running on http://localhost:${port}`);
 });
